@@ -1,7 +1,7 @@
 {
-  "name": "pj-node-imserver-ballroom",
+  "name": "websocket-node",
   "version": "1.0.0",
-  "description": "A03盛典宴会厅聊天项目",
+  "description": "借鉴网易游戏框架【pinus】搭建 WebSocketService ，全文采用 TS 编写",
   "main": "dist/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "ssh://git@gitlabssh.toolshello.com:30222/a03/pj-node-imserver-ballroom.git"
+    "url": "ssh://git@github.com:mytwz/websocket-node.git"
   },
   "keywords": [],
   "author": "Summer",
