@@ -1,0 +1,29 @@
+<!--
+ * @Author: Summer
+ * @LastEditors: Summer
+ * @Description: 
+ * @Date: 2021-11-05 11:26:27 +0800
+ * @LastEditTime: 2021-11-05 11:34:47 +0800
+ * @FilePath: \pj-node-imserver-ballroom\static\index.html
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    测试页面
+</body>
+<script>
+    var ws = new WebSocket("ws://10.9.16.12:8080");
+    ws.onopen = function(){ console.log("连接成功") }
+    ws.onclose = function(code, msg){ console.log("连接断开", code, msg) }
+    ws.onerror = function(error){ console.log("连接异常", error) }
+    ws.onmessage = function({ data }){
+        console.log("收到消息", data)
+    }
+</script>
+</html>

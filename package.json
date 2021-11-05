@@ -1,0 +1,40 @@
+{
+  "name": "pj-node-imserver-ballroom",
+  "version": "1.0.0",
+  "description": "A03盛典宴会厅聊天项目",
+  "main": "dist/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "start": "tsc && node ./dist/index.js dev 8080"
+  },
+  "repository": {
+    "type": "git",
+    "url": "ssh://git@gitlabssh.toolshello.com:30222/a03/pj-node-imserver-ballroom.git"
+  },
+  "keywords": [],
+  "author": "Summer",
+  "license": "ISC",
+  "dependencies": {
+    "amqplib": "^0.6.0",
+    "glob": "^7.2.0",
+    "ioredis": "^4.28.0",
+    "koa": "^2.13.4",
+    "koa-static": "^5.0.0",
+    "lodash": "^4.17.15",
+    "log4js": "^6.3.0",
+    "notepack.io": "^2.3.0",
+    "request-ip": "^2.1.3",
+    "ws": "^8.2.3"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.8.2",
+    "@types/glob": "^7.2.0",
+    "@types/ioredis": "^4.28.1",
+    "@types/koa": "^2.13.4",
+    "@types/koa-static": "^4.0.2",
+    "@types/lodash": "^4.14.176",
+    "@types/request-ip": "0.0.37",
+    "@types/ws": "^8.2.0"
+  }
+}
