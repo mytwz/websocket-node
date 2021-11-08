@@ -3,14 +3,20 @@
  * @LastEditors: Summer
  * @Description: 工具类
  * @Date: 2021-11-03 12:24:35 +0800
- * @LastEditTime: 2021-11-05 17:12:29 +0800
- * @FilePath: \pj-node-imserver-ballroom\src\utils\index.ts
+ * @LastEditTime: 2021-11-08 15:48:57 +0800
+ * @FilePath: /websocket-node/src/utils/index.ts
  */
 import _ from "lodash"
 import path from "path";
 import glob from "glob"
 import log4j, { Logger } from "log4js";
 import { FilescanItem } from "../dbc";
+
+import _ from "lodash"
+import path from "path";
+import glob from "glob"
+import { FilescanItem } from "../dbc";
+import os from "os";
 
 let __index__ = 0
 let id24_buffer = Buffer.alloc(16);
@@ -66,11 +72,52 @@ export function clearRequireCache(path: string) {
     }
     delete require.cache[path];
 }
+
+export interface Logger {
+    info(message:string, ...args:any[]): void;
+    error(message:string, ...args:any[]): void;
+    [key: string]: any;
+}
+
+declare global {
+    interface Console {
+        [key: string]: any;
+    }
+
+    interface Date {
+        format(fmt: string): string;
+    }
+}
+
+Date.prototype.format = function(fmt:string){
+    let format = <{[key:string]: string}>{
+        y: String(this.getFullYear()),
+        M: String(this.getMonth() + 1).padStart(2, "0"),
+        d: String(this.getDate()).padStart(2, "0"),
+        H: String(this.getHours()).padStart(2, "0"),
+        m: String(this.getMinutes()).padStart(2, "0"),
+        s: String(this.getSeconds()).padStart(2, "0"),
+        S: String(this.getMilliseconds()).padStart(3, "0"),
+    }
+    return fmt.replace(/[yMdHmsS]/g, function(key:string){
+        return format[key] || key;
+    });
+}
+
+
 /**
  * 获取 log4j 日志对象
  * @param filename 需要打印日志的文件名
  * @returns 
  */
 export function getLogger(filename: string): Logger {
-    return log4j.getLogger(path.basename(filename, ".js"))
+    return ["info", "error"].reduce((logger, key) => {
+        logger[key] = function(message:string, ...args:any[]){
+            const method = console[key]
+            if(method instanceof Function) {
+                method.apply(console, [`[${os.hostname()}][${process.pid}][${new Date().format("y/M/d-H:m:s:S")}] [${key}] ${path.basename(filename, ".js")} -`].concat([message,...args].map(msg => typeof(msg) == "object" ? JSON.stringify(msg) : msg)))
+            }
+        }
+        return logger;
+    }, <Logger>{})
 }

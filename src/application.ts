@@ -3,8 +3,8 @@
  * @LastEditors: Summer
  * @Description: 程序核心文件，用于 WebSocket 连接的维护和消息处理分发
  * @Date: 2021-11-03 12:12:11 +0800
- * @LastEditTime: 2021-11-05 17:03:12 +0800
- * @FilePath: \pj-node-imserver-ballroom\src\application.ts
+ * @LastEditTime: 2021-11-08 15:47:53 +0800
+ * @FilePath: /websocket-node/src/application.ts
  */
 import { IncomingMessage } from "http";
 import { EventEmitter } from 'events';
@@ -50,7 +50,7 @@ const MessageHandler = new class MessageHandler {
      * @param object.data 携带数据
      * @param session 客户端连接对象
      */
-    public handle({ path, data }: MessageData, session: Session) {
+    public handle([ path, data ]: MessageData, session: Session) {
         let index = path.lastIndexOf(".");
         let name = index > -1 ? path.substr(0, index) : path;
         let key = path.substr(index + 1);
@@ -92,17 +92,50 @@ const ComponentScan = new class ComponentScan {
     }
 }
 
+export enum MessageType {
+    PING,
+    PONG,
+    DATA
+}
+
 /**
  * 客户端连接对象
  */
 export class Session extends EventEmitter {
     /**连接ID */
     public readonly id: string = id24();
+    /**全局可配置对象 */
+    private readonly config: any = {};
+    
     constructor(public app: Application, private ws: WebSocket, private req: IncomingMessage) {
         super();
         this.ws.addEventListener("message", this.onmessage.bind(this));
         this.ws.addEventListener("error", this.onerror.bind(this));
         this.ws.addEventListener("close", this.onclose.bind(this));
+    }
+    /**
+     * 设置服务变量
+     * @param name 
+     * @param value 
+     */
+    public set(name: string, value: any) {
+        _.set(this.config, name, value);
+    }
+    /**
+     * 获取服务变量
+     * @param name 
+     * @returns 
+     */
+    public get<T>(name: string): T {
+        return _.get(this.config, name);
+    }
+    /**
+     * 检查是否存在某个服务变量
+     * @param name 
+     * @returns 
+     */
+    public has(name: string): boolean {
+        return _.has(this.config, name);
     }
     /**
      * 加入房间，同一个用户可以拥有多个连接
@@ -127,7 +160,12 @@ export class Session extends EventEmitter {
      */
     public send(path: string, data: any) {
         if (this.ws.OPEN) {
-            this.ws.send(JSON.stringify({ path, data }));
+            this.ws.send(MessageType.DATA + JSON.stringify([path, data]));
+        }
+    }
+    private pong(){
+        if(this.ws.OPEN) {
+            this.ws.send(String(MessageType.PONG) + Date.now())
         }
     }
     /**客户端 IP 地址 */
@@ -137,8 +175,23 @@ export class Session extends EventEmitter {
 
     private onmessage(event: MessageEvent) {
         try {
-            let data: MessageData = JSON.parse(event.data.toString("utf-8"));
-            MessageHandler.handle(data, this);
+            let msg = event.data.toString("utf-8");
+            let cmd = +msg.slice(0, 1);
+            let data = msg.slice(1);
+            switch (cmd) {
+                case MessageType.PING: {
+                    this.pong()
+                    break;
+                }
+                case MessageType.DATA: {
+                    MessageHandler.handle(JSON.parse(data), this);
+                    break;
+                }
+                default: {
+
+                    break;
+                }
+            }
         } catch (error) {
             logger.error("解析客户端消息异常", event.data.toString(), error);
         }

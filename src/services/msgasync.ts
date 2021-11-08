@@ -3,8 +3,8 @@
  * @LastEditors: Summer
  * @Description: 多进程消息同步
  * @Date: 2021-11-03 18:03:20 +0800
- * @LastEditTime: 2021-11-05 17:17:32 +0800
- * @FilePath: \pj-node-imserver-ballroom\src\services\msgasync.ts
+ * @LastEditTime: 2021-11-08 15:48:33 +0800
+ * @FilePath: /websocket-node/src/services/msgasync.ts
  */
 
 import Application from "../application";
@@ -34,7 +34,7 @@ enum AsyncType {
     /**获取所有的房间号 */
     roomall,
     /**获取某个客户端所加入的房间号 */
-    useridByroom,
+    roomsByuserid,
     /**统计所有客户端总数 */
     clientTotal,
     //////////////////
@@ -47,7 +47,7 @@ enum BroadcastType {
 }
 
 export default class MsgAsync {
-    /**组件ID： 可以在 app.get("msgasync") 获取到 */
+    /**组件ID： 可以在启动完毕后 app.get("msgasync") 获取到 */
     __name__: string = "msgasync";
     /**消息通道名称 */
     private readonly channel: string;
@@ -92,7 +92,7 @@ export default class MsgAsync {
             let mqsub = await mqconnect.createChannel();
             await mqsub.assertExchange(this.channel, "fanout", { durable: false });
 
-            let qok = await mqsub.assertQueue("", { exclusive: false, autoDelete: true, durable: false }); logger.info("QOK", qok.queue);
+            let qok = await mqsub.assertQueue("", { exclusive: false, autoDelete: true, durable: false });
             await mqsub.bindQueue(qok.queue, this.channel, "");
             await mqsub.consume(qok.queue, this.onmessage.bind(this), { noAck: true })
 
@@ -112,7 +112,7 @@ export default class MsgAsync {
         this.redis.set(this.id, 1, "ex", 2);
         setTimeout(this.survivalHeartbeat.bind(this), 1000);
     }
-
+    
     /**获取所有存活主机的数量 */
     private async allSurvivalCount(): Promise<number> {
         let keys = await this.redis.keys(`msgasync-host*`);
@@ -204,7 +204,7 @@ export default class MsgAsync {
                         this.publish(id, AsyncType.response, requestid, this.app.clients.size);
                         break;
                     }
-                    case AsyncType.useridByroom: {
+                    case AsyncType.roomsByuserid: {
                         let userid:string = args.shift()
                         let sessionids = this.app.users.get(userid) || [];
                         let rooms: string[] = [];
@@ -234,7 +234,7 @@ export default class MsgAsync {
     }
     /**获取某个用户所加入的所有房间号 */
     public getRoomByuserid(userid:string): Promise<string[]>{
-        return this.publish(this.id, AsyncType.useridByroom, this.requestid, userid);
+        return this.publish(this.id, AsyncType.roomsByuserid, this.requestid, userid);
     }
     /**向分布式集群发送消息广播 */
     public sendBroadcast(path: string, data: any) {
