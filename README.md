@@ -2,7 +2,7 @@
 借鉴网易游戏框架【pinus】搭建 WebSocketService ，全文采用 TS 编写
 ## 使用说明
 ### 服务端篇
-- 1、程序启动使用 ```bash ./sart.sh [环境变量值: dev|test|pre|prod] [端口号]```
+- 1、程序启动使用 ```bash ./sart.sh [环境变量值: dev|test|pre|prod] [端口号]``` 需要安装 pm2
 - 2、模块说明：程序中所有的自动化组件都遵循此模型并且放置在 ```[handlers/dbc/services]``` 目录中方能自动注入到程序中
 ```ts
 interface Component {
