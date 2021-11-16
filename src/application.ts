@@ -1,27 +1,31 @@
 /*
  * @Author: Summer
  * @LastEditors: Summer
- * @Description: 程序核心文件，用于 WebSocket 连接的维护和消息处理分发
- * @Date: 2021-11-03 12:12:11 +0800
- * @LastEditTime: 2021-11-08 15:47:53 +0800
+ * @Description: 
+ * @Date: 2021-11-12 16:52:47 +0800
+ * @LastEditTime: 2021-11-16 10:53:59 +0800
  * @FilePath: /websocket-node/src/application.ts
  */
+
+import http = require('http');
 import { IncomingMessage } from "http";
 import { EventEmitter } from 'events';
-import WebSocket, { Server, ServerOptions, MessageEvent, CloseEvent, ErrorEvent, Event } from "ws";
-import { id24, JSFilescan, getLogger } from "./utils";
-import { Component, MessageData } from "./dbc";
+import { id24, JSFilescan, getLogger, Logger, MD5 } from "./utils";
+import { Component, ErrorCode, MessageData } from "./dbc";
 import requestIp, { Request } from "request-ip"
 import _ from "lodash";
 import path from "path";
 import config from "./config";
+import * as engine from "engine.io";
+import * as parser from "socket.io-parser";
 
 const logger = getLogger(__filename)
 
 /**
  * 消息处理器
  */
-const MessageHandler = new class MessageHandler {
+ const MessageHandler = new class MessageHandler {
+    private logger: Logger = getLogger("messagehandler");
     /**所有的消息处理器都会自动注入到这里 */
     private readonly handlers: { [name: string]: Component } = {};
     /**这个列表主要是方便在启动后统一进行启动后函数回调 */
@@ -35,7 +39,7 @@ const MessageHandler = new class MessageHandler {
                 if (typeof obj.loadBefore == "function") await obj.loadBefore();
                 if (obj.__name__) app.set(obj.__name__, obj);
                 this.objectList.push(this.handlers[key] = obj);
-                logger.info("加载消息处理器", key)
+                this.logger.info("load", key)
             }
         }
     }
@@ -50,10 +54,11 @@ const MessageHandler = new class MessageHandler {
      * @param object.data 携带数据
      * @param session 客户端连接对象
      */
-    public handle([ path, data ]: MessageData, session: Session) {
+    public handle(path:string, data:any, session: Session) {
         let index = path.lastIndexOf(".");
-        let name = index > -1 ? path.substr(0, index) : path;
+        let name = index > -1 ? path.substr(0, index) : "defaultHandler";
         let key = path.substr(index + 1);
+        this.logger.info("handle", { index, name, key })
         if(this.handlers[name] && typeof this.handlers[name][key] == "function"){
             let handle: Function = this.handlers[name][key];
             handle.call(this.handlers[name], data, session);
@@ -65,7 +70,7 @@ const MessageHandler = new class MessageHandler {
  * 其他组件扫描
  */
 const ComponentScan = new class ComponentScan {
-
+    private logger: Logger = getLogger("componentscan");
     private readonly components: { [name: string]: Component } = {};
 
     /**
@@ -82,7 +87,7 @@ const ComponentScan = new class ComponentScan {
             if (obj.__name__) {
                 if (typeof obj.loadBefore == "function") await obj.loadBefore();
                 app.set(obj.__name__, this.components[obj.__name__] = obj);
-                logger.info("加载服务", key)
+                this.logger.info("load", key)
             }
         }
     }
@@ -92,33 +97,63 @@ const ComponentScan = new class ComponentScan {
     }
 }
 
-export enum MessageType {
-    PING,
-    PONG,
-    DATA
-}
 
-/**
- * 客户端连接对象
- */
 export class Session extends EventEmitter {
+    private logger: Logger = getLogger("session");
     /**连接ID */
-    public readonly id: string = id24();
+    public id: string = "";
     /**全局可配置对象 */
-    private readonly config: any = {};
+    private config: any = {};
+
+    private encoder: parser.Encoder = new parser.Encoder();
+    private decoder: parser.Decoder = new parser.Decoder();
     
-    constructor(public app: Application, private ws: WebSocket, private req: IncomingMessage) {
+    constructor(public app: Application, private socket: engine.Socket){
         super();
-        this.ws.addEventListener("message", this.onmessage.bind(this));
-        this.ws.addEventListener("error", this.onerror.bind(this));
-        this.ws.addEventListener("close", this.onclose.bind(this));
+        this.id = socket.id;
+        this.decoder.on("decoded", this.onmessage.bind(this))
+        socket.send("0")
+        socket.on("message", this.decoder.add.bind(this.decoder))
+        socket.on("packet", packet => this.logger.info("packet", packet))
+        socket.on("error", this.onerror.bind(this))
+        socket.on("close", this.onclose.bind(this))
+    }
+    private onmessage(packet: parser.Packet) {
+        try {
+            this.logger.info("onmessage", packet)
+            if([ parser.PacketType.EVENT, parser.PacketType.BINARY_EVENT ].includes(packet.type)) {
+                let [path, data] = packet.data;
+                MessageHandler.handle(path, data, this);
+            }
+        } catch (error) {
+            logger.error("解析客户端消息异常", packet.data, error);
+        }
+    }
+    private onerror(error: Error) {
+        this.logger.info(`client tcp error ${this.ip}: ${this.id}`, error.message, error.stack);
+    }
+    /**
+     * 客户端断开了解
+     * @param event 
+     */
+    private onclose(reason: string, description?: Error) {
+        logger.info(`client tcp close ${this.ip}: ${this.id}`, reason, description?.message, description?.stack);
+        this.emit("close", reason);
+        this.removeAllListeners(); // 释放所有绑定在该对象上的事件
+        this.socket.removeAllListeners(); // 释放所有绑定在 ws 连接上的事件
+        this.app.clients.delete(this.id); // 释放连接对象
+        this.config = null;
+    }
+    /**客户端 IP 地址 */
+    public get ip(): string {
+        return requestIp.getClientIp(<Request>this.socket.request) || "0.0.0.0";
     }
     /**
      * 设置服务变量
      * @param name 
      * @param value 
      */
-    public set(name: string, value: any) {
+     public set(name: string, value: any) {
         _.set(this.config, name, value);
     }
     /**
@@ -126,8 +161,8 @@ export class Session extends EventEmitter {
      * @param name 
      * @returns 
      */
-    public get<T>(name: string): T {
-        return _.get(this.config, name);
+    public get<T>(name: string, def:T = <any>null): T {
+        return _.get(this.config, name) || def;
     }
     /**
      * 检查是否存在某个服务变量
@@ -137,12 +172,13 @@ export class Session extends EventEmitter {
     public has(name: string): boolean {
         return _.has(this.config, name);
     }
+
     /**
      * 加入房间，同一个用户可以拥有多个连接
      * @param userid 用户ID
      * @param room 房间号
      */
-    public joinRoom(userid: string, room: string) {
+     public joinRoom(userid: string, room: string) {
         this.app.joinRoom(userid, this.id, room);
     }
     /**
@@ -153,86 +189,59 @@ export class Session extends EventEmitter {
     public leaveRoom(userid: string, room: string) {
         this.app.leaveRoom(userid, this.id, room);
     }
-    /**
-     * 该连接直接向前端发送数据
-     * @param path 
-     * @param data 
-     */
-    public send(path: string, data: any) {
-        if (this.ws.OPEN) {
-            this.ws.send(MessageType.DATA + JSON.stringify([path, data]));
+    public sendBinary(event:string, data: string | Buffer){
+        if(this.socket.readyState == "open") {
+            this.socket.send(`51-["${event}",{"_placeholder":true,"num":0}]`, { compress:true })
+            this.socket.send(Buffer.from(data), { compress:true })
         }
     }
-    private pong(){
-        if(this.ws.OPEN) {
-            this.ws.send(String(MessageType.PONG) + Date.now())
-        }
-    }
-    /**客户端 IP 地址 */
-    public get ip(): string {
-        return requestIp.getClientIp(<Request>this.req) || "0.0.0.0";
-    }
 
-    private onmessage(event: MessageEvent) {
-        try {
-            let msg = event.data.toString("utf-8");
-            let cmd = +msg.slice(0, 1);
-            let data = msg.slice(1);
-            switch (cmd) {
-                case MessageType.PING: {
-                    this.pong()
-                    break;
-                }
-                case MessageType.DATA: {
-                    MessageHandler.handle(JSON.parse(data), this);
-                    break;
-                }
-                default: {
-
-                    break;
-                }
+    public send(event:string, data: string | Buffer){
+        if(this.socket.readyState == "open") {
+            if(Buffer.isBuffer(data)){
+                this.sendBinary(event, data);
             }
-        } catch (error) {
-            logger.error("解析客户端消息异常", event.data.toString(), error);
+            else for(let packet of this.encoder.encode({ type: parser.PacketType.EVENT, nsp:"/", data:[event, data] })){
+                this.socket.send(packet, { compress:true })
+            }
         }
-    }
-    private onerror(event: ErrorEvent) {
-        logger.info(`client tcp error ${this.ip}: ${this.id}`);
-    }
-    /**
-     * 客户端断开了解
-     * @param event 
-     */
-    private onclose(event: CloseEvent) {
-        logger.info(`client tcp close ${this.ip}: ${this.id}`, event.code, event.reason);
-        this.emit("close", event.code, event.reason);
-        this.removeAllListeners(); // 释放所有绑定在该对象上的事件
-        this.ws.removeAllListeners(); // 释放所有绑定在 ws 连接上的事件
-        this.app.clients.delete(this.id); // 释放连接对象
     }
 }
-/**
- * WebSocket 服务对象
- */
+
+class Server extends engine.Server {
+    constructor(opts?: engine.ServerOptions){
+        super(opts);
+    }
+
+    generateId(req: http.IncomingMessage): string {
+        return MD5(`${req.headers["user-agent"]}${req.headers["sec-websocket-key"]}${id24()}`)
+    }
+}
+
 export default class Application extends EventEmitter {
-    constructor(private opts: ServerOptions) {
+
+    constructor(httpServer: http.Server, opts?: engine.ServerOptions) {
         super();
         // 注册配置对象
         this.set("config", config);
-        // 在加载完所有组件之后再启动程序
-        Promise.all([ComponentScan.load(this), MessageHandler.load(this)]).then(_ => {
+        Promise.all([ComponentScan.load(this), MessageHandler.load(this)]).then(async _ => {
             logger.info("加载完成")
-            this.server = new Server(Object.assign(this.opts, {
-                clients: false,
-                perMessageDeflate: true,
-                verifyClient: this.verifyClient.bind(this) 
-            }), this.complete.bind(this));
-            this.server.on("connection", (socket: WebSocket, req: IncomingMessage) => {
-                let client = new Session(this, socket, req);
+            this.server = new Server({
+                ...opts, 
+                allowRequest: this.verifyClient.bind(this),
+                perMessageDeflate:true,
+                httpCompression:true
+            });
+            this.server.attach(httpServer, { path:"/socket.io/" })
+            this.server.on("connection", (socket: engine.Socket) => {
+                let client = new Session(this, socket);
                 this.clients.set(client.id, client);
-                logger.info(`client tcp open ${client.ip}: ${client.id}`);
+                logger.info(`client tcp open ${client.ip} ${client.id}`, socket.request.headers["user-agent"]);
             })
-            this.emit("load", this);
+            
+            await ComponentScan.loadAfter();
+            await MessageHandler.loadAfter();
+            logger.info("启动完成", process.env.NODE_PORT)
         }).catch(err => {
             logger.error("启动失败", err)
             process.exit(0);
@@ -241,9 +250,10 @@ export default class Application extends EventEmitter {
         logger.info("加载配置文件", config)
     }
 
-    private server: Server = <any>null;
-    /**是否完全加载完毕 */
-    public LOADCOMPLETE: boolean = false;
+    private verifyClient(req: http.IncomingMessage, callback: (err: string|null|undefined, success: boolean) => void){
+        callback("OK", true);
+    }
+    private server: Server = <any>null
     /**全局可配置对象 */
     private readonly config: any = {};
     /** {id: Session} */
@@ -254,31 +264,12 @@ export default class Application extends EventEmitter {
     public roomids: Map<string, Set<string>> = new Map();
     /** {user: [sessionid]}*/
     public users: Map<string, Set<string>> = new Map();
-    /**所有准备工作完毕后调用该方法 */
-    public async complete(){
-        if(this.LOADCOMPLETE) return ;
-        await ComponentScan.loadAfter();
-        await MessageHandler.loadAfter();
-        this.LOADCOMPLETE = true;
-        logger.info("启动完成", process.env.NODE_PORT)
-    }
-    /**
-     * 连接前校验
-     * @param info 
-     * @param callback 
-     */
-    private verifyClient(info: { origin: string; secure: boolean; req: IncomingMessage }, callback: (res: boolean, code?: number, message?: string) => void): void {
-        if (!this.LOADCOMPLETE) {
-            callback(false, 400, "服务器还没准备好！")
-        }
-        else callback(true);
-    }
     /**
      * 设置服务变量
      * @param name 
      * @param value 
      */
-    public set(name: string, value: any) {
+     public set(name: string, value: any) {
         _.set(this.config, name, value);
     }
     /**
@@ -286,8 +277,8 @@ export default class Application extends EventEmitter {
      * @param name 
      * @returns 
      */
-    public get<T>(name: string): T {
-        return _.get(this.config, name);
+    public get<T>(name: string, def:T = <any>null): T {
+        return _.get(this.config, name) || def;
     }
     /**
      * 检查是否存在某个服务变量
@@ -297,13 +288,14 @@ export default class Application extends EventEmitter {
     public has(name: string): boolean {
         return _.has(this.config, name);
     }
+    
     /**
      * 加入房间
      * @param userid 用户ID
      * @param id 连接ID
      * @param room 房间号
      */
-    public joinRoom(userid: string, id: string, room: string) {
+     public joinRoom(userid: string, id: string, room: string) {
         if (!this.rooms.has(room)) this.rooms.set(room, new Set());
         this.rooms.get(room)?.add(id);
 
@@ -357,7 +349,7 @@ export default class Application extends EventEmitter {
      * @param opts 
      * @returns 
      */
-    public static start(opts: ServerOptions): Application {
-        return new Application(opts);
+    public static start(httpServer: http.Server, opts?: engine.ServerOptions): Application {
+        return new Application(httpServer, opts);
     }
 }

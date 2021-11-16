@@ -2,21 +2,17 @@
  * @Author: Summer
  * @LastEditors: Summer
  * @Description: 工具类
- * @Date: 2021-11-03 12:24:35 +0800
- * @LastEditTime: 2021-11-08 15:48:57 +0800
- * @FilePath: /websocket-node/src/utils/index.ts
+ * @Date: 2021-11-12 16:48:12 +0800
+ * @LastEditTime: 2021-11-12 17:03:53 +0800
+ * @FilePath: \pj-node-imserver-v3\src\utils\index.ts
  */
-import _ from "lodash"
-import path from "path";
-import glob from "glob"
-import log4j, { Logger } from "log4js";
-import { FilescanItem } from "../dbc";
 
 import _ from "lodash"
 import path from "path";
 import glob from "glob"
-import { FilescanItem } from "../dbc";
 import os from "os";
+import crypto from "crypto"
+import { FilescanItem } from "../dbc";
 
 let __index__ = 0
 let id24_buffer = Buffer.alloc(16);
@@ -115,9 +111,21 @@ export function getLogger(filename: string): Logger {
         logger[key] = function(message:string, ...args:any[]){
             const method = console[key]
             if(method instanceof Function) {
-                method.apply(console, [`[${os.hostname()}][${process.pid}][${new Date().format("y/M/d-H:m:s:S")}] [${key}] ${path.basename(filename, ".js")} -`].concat([message,...args].map(msg => typeof(msg) == "object" ? JSON.stringify(msg) : msg)))
+                method.apply(console, [`[${os.hostname()}][${process.pid}][${new Date().format("y/M/d-H:m:s:S")}] [${key}] ${path.basename(filename, ".js")} -`].concat([message,...args].map(msg => {
+                    if(msg instanceof Error) {
+                        return `${msg.message} ${msg.stack}`
+                    }
+                    else if(typeof(msg) == "object") {
+                        return JSON.stringify(msg);
+                    }
+                    return msg;
+                })))
             }
         }
         return logger;
     }, <Logger>{})
+}
+
+export function MD5(str:string){
+    return crypto.createHash("md5").update(str).digest('hex')
 }

@@ -3,8 +3,8 @@
  * @LastEditors: Summer
  * @Description: 多进程消息同步
  * @Date: 2021-11-03 18:03:20 +0800
- * @LastEditTime: 2021-11-08 15:48:33 +0800
- * @FilePath: /websocket-node/src/services/msgasync.ts
+ * @LastEditTime: 2021-11-16 10:36:57 +0800
+ * @FilePath: \pj-node-imserver-v3\src\services\msgasync.ts
  */
 
 import Application from "../application";
@@ -48,7 +48,7 @@ enum BroadcastType {
 
 export default class MsgAsync {
     /**组件ID： 可以在启动完毕后 app.get("msgasync") 获取到 */
-    __name__: string = "msgasync";
+    // __name__: string = "msgasync";
     /**消息通道名称 */
     private readonly channel: string;
     /**同步超时时间 */
@@ -71,10 +71,10 @@ export default class MsgAsync {
     private msgbuffers: Buffer[] = [];
 
     constructor(private app: Application) {
-        if (!this.app.has("config.msgasync")) throw new Error("没有找到 msgasync 配置")
-        if (!this.app.has("config.msgasync.redis")) throw new Error("没有找到 msgasync.redis 配置")
-        if (!this.app.has("config.msgasync.amqplib")) throw new Error("没有找到 msgasync.amqplib 配置")
-        if (!this.app.has("config.msgasync.channel")) throw new Error("没有找到 msgasync.channel 配置")
+        if (!this.app.has("config.msgasync")) throw new Error("not found msgasync config")
+        if (!this.app.has("config.msgasync.redis")) throw new Error("not found msgasync.redis config")
+        if (!this.app.has("config.msgasync.amqplib")) throw new Error("not found msgasync.amqplib config")
+        if (!this.app.has("config.msgasync.channel")) throw new Error("not found msgasync.channel config")
 
         this.channel = this.app.get("config.msgasync.channel");
         this.requestsTimeout = this.app.get("config.msgasync.requestsTimeout") || 5000;
@@ -84,7 +84,7 @@ export default class MsgAsync {
         try {
             let config: RedisOptions = this.app.get("config.msgasync.redis")
             this.redis = new ioredis(config);
-            if (config.password) this.redis.auth(config.password).then(_ => logger.info("Redis 验证密码成功"))
+            if (config.password) this.redis.auth(config.password).then(_ => logger.info("Redis Verify the password is successful"))
 
             let url: string = this.app.get("config.msgasync.amqplib");
             let mqconnect = await connect(url);
@@ -98,12 +98,12 @@ export default class MsgAsync {
 
             this.amqplibPub = await mqconnect.createChannel();
             await this.amqplibPub.assertExchange(this.channel, "fanout", { durable: false });
-            logger.info("建立 AMQPLIB 消息通道完成", qok.queue)
+            logger.info("create AMQPLIB Message channel is successful", qok.queue)
             // 开始存活
             this.survivalHeartbeat();
             this.ispublish = true;
         } catch (error) {
-            logger.error("消息同步服务启动失败", error)
+            logger.error("Message synchronization service failed to start", error)
             throw error;
         }
     }
@@ -161,10 +161,10 @@ export default class MsgAsync {
                     this.asyncMsg();
                     this.ispublish = true;
                 } catch (error) {
-                    logger.error("消息同步失败", error);
+                    logger.error("Message synchronization failed", error);
                 }
             }
-            else reject(`发送失败: [ispublish=${this.ispublish}]`)
+            else reject(`Failed to send: [ispublish=${this.ispublish}]`)
         })
     }
 
@@ -219,7 +219,7 @@ export default class MsgAsync {
                         break;
                 }
             } catch (error) {
-                logger.error("解析数据失败", error);
+                logger.error("Failed to parse data", error);
             }
         }
     }
@@ -237,15 +237,18 @@ export default class MsgAsync {
         return this.publish(this.id, AsyncType.roomsByuserid, this.requestid, userid);
     }
     /**向分布式集群发送消息广播 */
-    public sendBroadcast(path: string, data: any) {
+    public sendBroadcast(sid: string, path: string, data: any) {
         this.publish(this.id, AsyncType.broadcast, this.requestid, { type: BroadcastType.all, path, data });
+        logger.info(`[${sid}][sendBroadcast] - all`, {path, data});
     }
     /**向分布式集群发送房间消息广播 */
-    public sendRoom(room: string, path: string, data: any) {
+    public sendRoom(sid: string, room: string, path: string, data: any) {
         this.publish(this.id, AsyncType.broadcast, this.requestid, { type: BroadcastType.room, room, path, data });
+        logger.info(`[${sid}][sendRoom] - ${room}`, {path, data});
     }
     /**向分布式集群某个用户发送消息广播 */
-    public send(userid: string, path: string, data: any) {
-        this.publish(this.id, AsyncType.broadcast, this.requestid, { type: BroadcastType.user, userid, path, data });
+    public send(sid: string, touserid:string, path: string, data: any) {
+        this.publish(this.id, AsyncType.broadcast, this.requestid, { type: BroadcastType.user, touserid, path, data });
+        logger.info(`[${sid}][send] - ${touserid}`, {path, data});
     }
 }

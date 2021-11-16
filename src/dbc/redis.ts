@@ -1,16 +1,16 @@
 /*
  * @Author: Summer
  * @LastEditors: Summer
- * @Description: Redis 服务对象
+ * @Description: Redis 服务对象, 默认数据失效一天
  * @Date: 2021-11-04 14:31:46 +0800
- * @LastEditTime: 2021-11-05 17:12:05 +0800
- * @FilePath: \pj-node-imserver-ballroom\src\dbc\redis.ts
+ * @LastEditTime: 2021-11-16 10:21:44 +0800
+ * @FilePath: \pj-node-imserver-v3\src\dbc\redis.ts
  */
 import { Redis, RedisOptions } from "ioredis"
 import ioredis from "ioredis"
 import { getLogger } from "../utils";
 import Application from "../application";
-import { DEFAULT_PAGE_NO, DEFAULT_PAGE_SIZE } from "./constants";
+import { DEFAULT_PAGE_NO, DEFAULT_PAGE_SIZE, ONE_DAY } from "./constants";
 const logger = getLogger(__filename);
 /**替换 redis keys 命令实现，避免某些 Redis 服务器没有 keys 命令 */
 ioredis.prototype.keys = async function (pattern: string) {
@@ -29,6 +29,8 @@ export default class RedisDBC {
     __name__: string = "redis";
     private client: Redis = <any>null;
     constructor(private app: Application) {
+    }
+    private async loadBefore() {
         try {
             let config: RedisOptions = this.app.get("config.redis")
             if (!config) throw new Error("没有找到 Redis 配置")
@@ -52,6 +54,10 @@ export default class RedisDBC {
         await this.client.hdel(String(key), String(name));
     }
 
+    public async keys(name:string): Promise<string[]>{
+        return await this.client.keys(name);
+    }
+
     /**
      * 获取原生值
      * @param {*} key 
@@ -64,12 +70,21 @@ export default class RedisDBC {
      * @param {*} key 
      * @param {*} value 
      */
-    public async setValue(key: string, value: string) {
-        await this.client.set(String(key), value)
+    public async setValue(key: string, value: string, s:number = ONE_DAY) {
+        await this.client.set(String(key), value, "px", s)
     }
 
-    public async setHashValue(key: string, name: string, value: string) {
+    public async setHashValue(key: string, name: string, value: string, s:number = ONE_DAY) {
         await this.client.hset(String(key), String(name), value);
+        await this.client.pexpire(key, s)
+    }
+    /**
+     * 设置某个 Key 的过期时间
+     * @param key 
+     * @param ss 毫秒
+     */
+    public async pexpire(key: string, ss: number): Promise<void> {
+        await this.client.pexpire(key, ss)
     }
 
     public async getHashValue(key: string, name: string) {
@@ -106,8 +121,8 @@ export default class RedisDBC {
      * @param {*} key 
      * @param {*} value 
      */
-    public async setObject<T>(key: string, value: T): Promise<T> {
-        await this.setValue(key, JSON.stringify(value))
+    public async setObject<T>(key: string, value: T, s:number = ONE_DAY): Promise<T> {
+        await this.setValue(key, JSON.stringify(value), s)
         return value;
     }
 
@@ -115,7 +130,7 @@ export default class RedisDBC {
      * 获取原生列表
      * @param  {...any} args redis.lrange 原生方法参数 
      */
-    public async getObjectList<T>(key: string, start: number, stop: number): Promise<Array<T>> {
+    public async getObjectList<T>(key: string, start: number = 0, stop: number = -1): Promise<Array<T>> {
         const results = await this.client.lrange(key, start, stop);
         return results ? [...results.map(item => JSON.parse(item))] : [];
     }
@@ -158,7 +173,7 @@ export default class RedisDBC {
      * @param {*} data 消息内容
      * @param {*} history_limit 保存的条目数
      */
-    public async saveObjectListItem<T>(key: string, data: T, history_limit = -1): Promise<void> {
+    public async saveObjectListItem<T>(key: string, data: T, history_limit = -1, s:number = ONE_DAY): Promise<void> {
         await this.client.lpush(key, JSON.stringify(data))
         const totalEntries = await this.client.llen(key);
         if (history_limit != -1 && totalEntries > history_limit) {
@@ -166,6 +181,8 @@ export default class RedisDBC {
             for (let i = 0; i < totalEntries - history_limit; i++) pipe.rpop(key)
             await pipe.exec();
         }
+        
+        await this.client.pexpire(key, s)
     }
 
     /**
