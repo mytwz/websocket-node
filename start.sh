@@ -3,7 +3,7 @@
  # @LastEditors: Summer
  # @Description: 
  # @Date: 2021-11-03 10:54:12 +0800
- # @LastEditTime: 2021-11-08 15:47:20 +0800
+ # @LastEditTime: 2021-11-18 15:59:27 +0800
  # @FilePath: /websocket-node/start.sh
 ### 
 #!/bin/bash -xeu
@@ -20,29 +20,39 @@ Run(){
     # echo "正在检查程序依赖!...." 
     # npm i
     echo "正在生成 PM2 启动配置!...." 
-    echo "
+    echo -n "
 /**
- * Application configuration section
- * http://pm2.keymetrics.io/docs/usage/application-declaration/
- * 多个服务，依次放到apps对应的数组里
- */
+* Application configuration section
+* http://pm2.keymetrics.io/docs/usage/application-declaration/
+* 多个服务，依次放到apps对应的数组里
+*/
 module.exports = {
-    apps:[{
-        name: 'IM',
+    apps: [" > ./ecosystem.config.js
+    portStr=$2
+    ports=(${portStr//,/ })
+    index=1
+    for port in ${ports[@]}
+    do
+    echo -n "{
+        name: 'IM-$index',
         max_memory_restart: '1806M', // 1.5G
         script: './dist/index.js',
+        args:'--max-stack-size=1000 --max_semi_space_size=128',
         instances: -1,
         exec_mode: 'cluster',
         ssh_options: '',
         env: {
             NODE_ENV: '$1',
-            NODE_PORT: $2
+            NODE_PORT: $port,
+            // DEBUG:'*,-ioredis*'
         }
-    }]
-}
-    " > ./ecosystem.config.js
+    }, " >> ./ecosystem.config.js
+    index=$(($index+1))
+    done
+    echo "" >> ./ecosystem.config.js
+    echo "]}" >> ./ecosystem.config.js
     echo "开始启动${map[$1]}环境应用"
-    pm2 startOrReload ecosystem.config.js --update-env
+    # pm2 startOrReload ecosystem.config.js --update-env
     echo "启动完毕！。。。"
 }
 
