@@ -33,8 +33,9 @@ module.exports = {
     index=1
     for port in ${ports[@]}
     do
+    if [ "$port" -gt 0 ] 2>/dev/null ;then 
     echo -n "{
-        name: 'IM-$index',
+        name: 'ballroom-$index',
         max_memory_restart: '1806M', // 1.5G
         script: './dist/index.js',
         args:'--max-stack-size=1000 --max_semi_space_size=128',
@@ -48,6 +49,9 @@ module.exports = {
         }
     }, " >> ./ecosystem.config.js
     index=$(($index+1))
+    else 
+        index=$(($index))
+    fi 
     done
     echo "" >> ./ecosystem.config.js
     echo "]}" >> ./ecosystem.config.js
