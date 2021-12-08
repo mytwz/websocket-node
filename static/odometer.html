@@ -1,0 +1,31 @@
+<!--
+ * @Author: Summer
+ * @LastEditors: Summer
+ * @Description: 
+ * @Date: 2021-11-12 09:37:49 +0800
+ * @LastEditTime: 2021-11-12 11:24:50 +0800
+ * @FilePath: \pj-node-imserver-ballroom\static\odometer.html
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.bootcdn.net/ajax/libs/odometer.js/0.4.8/themes/odometer-theme-default.css" rel="stylesheet">
+    <title>Document</title>
+</head>
+
+<body>
+    <div class="odometer" style="font-size:50px">000000</div>
+    <iframe src="http://127.0.0.1:8080/test.html" frameborder="0"></iframe>
+</body>
+<script>
+    window.abc = function(a){ console.log(111, a) }
+    window.odometerOptions = { selector: '.odometer', format: 'ddddddddddddd', };
+    setInterval(_ => document.body.querySelector(".odometer").innerHTML = Date.now(), 1000)
+</script>
+<script src="https://cdn.bootcdn.net/ajax/libs/odometer.js/0.4.8/odometer.js"></script>
+
+</html>

@@ -1,0 +1,190 @@
+<!--
+ * @Author: Summer
+ * @LastEditors: Summer
+ * @Description: 
+ * @Date: 2021-11-29 17:39:08 +0800
+ * @LastEditTime: 2021-12-03 12:06:22 +0800
+ * @FilePath: \pj-node-imserver-ballroom\static\test2.html
+-->
+<html>
+
+<head>
+
+    <!-- Load TensorFlow.js -->
+
+    <!-- Get latest version at https://github.com/tensorflow/tfjs -->
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.2"></script>
+
+    <!-- Load BodyPix -->
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.0"></script>
+
+    <style>
+        body {
+
+            margin: 0;
+
+            padding: 0;
+
+        }
+
+        .canvas {
+
+            position: absolute;
+
+            top: 0;
+
+            left: 0;
+
+            width: 800px;
+
+            height: 600px;
+
+        }
+
+        .tm {
+
+            position: fixed;
+
+            font-size: 30px;
+
+            color: #fff;
+
+            font-weight: bolder;
+
+            right: -20%;
+
+            animation: 5s linear infinite toleft;
+
+            white-space: nowrap;
+
+        }
+
+        .tm-1 {
+
+            top: 20px;
+
+            animation-delay: 1s;
+
+        }
+
+        .tm-2 {
+
+            top: 60px;
+
+            animation-delay: 2s;
+
+        }
+
+        .tm-3 {
+
+            top: 100px;
+
+            animation-delay: 3s;
+
+        }
+
+        @keyframes toleft {
+
+            from {
+
+                right: -20%;
+
+            }
+
+
+
+            to {
+
+                right: 120%;
+
+            }
+
+        }
+    </style>
+</head>
+
+
+
+<body>
+
+    <video id="video" src="https://a03-test-static.we-pj.com/upload/20211203/0e50ba91ad707167efdf952adb5b3ed1.mp4"
+        crossorigin="anonymous" autoplay></video>
+
+    <div class="tm tm-1">我的天啦 ！ 这也太厉害了吧！</div>
+
+    <div class="tm tm-2">老铁，双击666</div>
+
+    <div class="tm tm-3">感谢金克丝送的一枚火箭</div>
+</body>
+
+
+
+<script>
+
+    (function loadScript(paths, callback) {
+        const script = document.createElement("script")
+        const list = [].concat(paths)
+        script.type = "text/javascript"
+        script.src = list.shift()
+        script.async = true;
+        script.onload = script.onreadystatechange = function () {
+            //据说有些浏览器不会触发 onload 事件
+            if (!script.readyState || "loaded" === script.readyState || "complete" === script.readyState) {
+                setTimeout(list.length ? loadScript(list, callback) : callback, 0);
+            }
+        }
+
+        document.body.appendChild(script);
+    })(["https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.2", "https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.0"], async function () {
+        console.log("开始加载")
+        const model = await bodyPix.load();
+        const canvas = document.createElement("canvas");
+        const video = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        const videoctx = video.getContext("2d");
+        console.log("加载完毕")
+        window.loadVideo = function (localVideo) {
+            canvas.width = video.width = localVideo.width = localVideo.videoWidth;
+            canvas.height = video.height = localVideo.height = localVideo.videoHeight;
+            canvas.className = video.className = localVideo.className
+            canvas.style.zIndex = "99"
+            canvas.style.position = "absolute"
+            localVideo.style.display = "none"
+            localVideo.parentNode.insertBefore(video, localVideo.nextElementSibling);
+            localVideo.parentNode.appendChild(canvas);
+
+            setTimeout(async function rendering() {
+                videoctx.drawImage(localVideo, 0, 0, video.width, video.height);
+
+                const segmentation = await model.segmentPerson(localVideo);
+                const coloredPartImage = bodyPix.toMask(segmentation,
+                    { r: 0, g: 0, b: 0, a: 255 },
+                    { r: 0, g: 0, b: 0, a: 0 }
+                );
+
+                ctx.drawImage(localVideo, 0, 0, canvas.width, canvas.height);
+
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const size = imageData.width * imageData.height * 4;
+                for (let i = 0; i < size; i++) {
+                    if ((i + 1) % 4) {
+                        coloredPartImage.data[i] = imageData.data[i];
+                    }
+                }
+
+                ctx.putImageData(coloredPartImage, 0, 0, 0, 0, canvas.width, canvas.height);
+                window.requestAnimationFrame(rendering);
+            }, 1000);
+
+        }
+
+
+        window.loadVideo(document.querySelector("#video"))
+    })
+</script>
+
+
+
+</html>

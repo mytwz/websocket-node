@@ -3,7 +3,7 @@
  * @LastEditors: Summer
  * @Description: 违禁词过滤器 DFA算法
  * @Date: 2021-11-08 17:28:06 +0800
- * @LastEditTime: 2021-11-08 17:34:28 +0800
+ * @LastEditTime: 2021-12-06 18:26:38 +0800
  * @FilePath: \pj-node-imserver-ballroom\src\utils\wordfilter.ts
  */
 
@@ -35,7 +35,7 @@ export default class BannedWordFilter {
     /**敏感词索引树结构 */
     private treeRoot: WordNode = new WordNode();
 
-    constructor(words:string[]){
+    constructor(words: string[]) {
         this.addWords(words);
     }
 
@@ -43,7 +43,7 @@ export default class BannedWordFilter {
      * 搜索是否符合的关键字
      * @param {String} word 字符串
      */
-    private findContainWord(word: string = "") {
+    private findContainWord(word: string = "", strict: boolean = false) {
         let words: number[] = [];
         let charCount = word.length;
         let node = this.treeRoot;
@@ -54,29 +54,8 @@ export default class BannedWordFilter {
             let char: string = ""; // 每一个需要匹配的字符
             let chars: string[] = word.split(""); // 过滤字符串数组
             let chilhNode = null; // 找到的节点
-            let complete = false;// 是否全部搜索完毕
 
-            // 先找到连着的
-            for (let i = 0; i < charCount; i++) {
-                char = chars[i];
-                chilhNode = node.getChild(char);
-                if (!chilhNode) {
-                    //重新开始下个敏感词检测
-                    node = this.treeRoot;
-                    vwords = [];
-                }
-                chilhNode = node.getChild(char);
-                if (chilhNode) {
-                    node = chilhNode;
-                    vwords.push(i);
-                    if (chilhNode.isEnd) {
-                        words = words.concat(vwords);
-                        vwords = [];
-                    }
-                }
-            }
-            // 再找到所有散落的
-            do {
+            if (strict) do {
                 vwords = [];
                 node = this.treeRoot;
                 for (let i = 0; i < charCount; i++) {
@@ -95,8 +74,26 @@ export default class BannedWordFilter {
                 if (!node.isEnd) {
                     alone = alone.concat(vwords);
                 }
-                complete = vwords.length == 0;
-            } while (complete === false);
+            } while (vwords.length !== 0);
+
+            else for (let i = 0; i < charCount; i++) {
+                char = chars[i];
+                chilhNode = node.getChild(char);
+                if (!chilhNode) {
+                    //重新开始下个敏感词检测
+                    node = this.treeRoot;
+                    vwords = [];
+                }
+                chilhNode = node.getChild(char);
+                if (chilhNode) {
+                    node = chilhNode;
+                    vwords.push(i);
+                    if (chilhNode.isEnd) {
+                        words = words.concat(vwords);
+                        vwords = [];
+                    }
+                }
+            }
         }
         return words;
     }
@@ -131,11 +128,13 @@ export default class BannedWordFilter {
      * 检测一个词并返回是否带敏感词和替换敏感词之后的结果
      * @param {String} word 检测的词
      * @param {String} repChar 代替敏感字的字符
+     * @param {String} strict 强力去除
      */
-    public filterWord(word: string = "", repChar: string = "*") {
+    public filterWord(word: string = "", repChar: string = "*", strict: boolean = false) {
         let wordArr = word.split("");
-        let words = this.findContainWord(word);
+        let words = this.findContainWord(word, strict);
         for (let i of words) wordArr.splice(i, 1, repChar)
+
         return wordArr.join("");
     }
 }

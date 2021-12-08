@@ -1,18 +1,13 @@
 /*
  * @Author: Summer
  * @LastEditors: Summer
- * @Description: 
- * @Date: 2021-11-15 09:24:03 +0800
- * @LastEditTime: 2021-11-15 17:43:34 +0800
- * @FilePath: \pj-node-imserver-v3\src\index.ts
+ * @Description: 程序主文件，入口文件
+ * @Date: 2021-11-03 10:51:45 +0800
+ * @LastEditTime: 2021-11-24 15:21:37 +0800
+ * @FilePath: \pj-node-imserver-ballroom\src\index.ts
  */
-
 import Application from "./application"
 import { getLogger } from "./utils";
-import http from "http";
-import Koa from "koa";
-import path from "path"
-import KoaStatic from "koa-static";
 
 const logger = getLogger(__filename);
 
@@ -27,12 +22,4 @@ process.on('unhandledRejection', (reason, p) => {
     logger.error('Caught Unhandled Rejection at ' + reason, p);
 });
 
-const app = new Koa().use(KoaStatic(path.join(__dirname, "../static")))
-const server = http.createServer(app.callback())
-server.listen(80, function(){
-    Application.start(server, {
-        // perMessageDeflate: false,
-        // pingTimeout: 10000,
-        // pingInterval: 6000,
-    })
-})
+Application.start(+(process.env.NODE_PORT = process.env.NODE_PORT || "8080"));

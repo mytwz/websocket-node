@@ -2,32 +2,31 @@
  * @Author: Summer
  * @LastEditors: Summer
  * @Description: 工具类
- * @Date: 2021-11-12 16:48:12 +0800
- * @LastEditTime: 2021-11-12 17:03:53 +0800
- * @FilePath: \pj-node-imserver-v3\src\utils\index.ts
+ * @Date: 2021-11-03 12:24:35 +0800
+ * @LastEditTime: 2021-11-26 12:01:17 +0800
+ * @FilePath: \pj-node-imserver-ballroom\src\utils\index.ts
  */
-
 import _ from "lodash"
 import path from "path";
 import glob from "glob"
-import os from "os";
-import crypto from "crypto"
 import { FilescanItem } from "../dbc";
+import os from "os";
+import request from "request";
+import crypto from "crypto"
+const Snowflake = require("@axihe/snowflake");
+const idWorker = new Snowflake(randomInt(0,31), randomInt(0,31));
+const logger = getLogger("utils")
 
-let __index__ = 0
-let id24_buffer = Buffer.alloc(16);
+export function randomInt(min:number=1, max:number=10): number {
+    return Math.floor(Math.random() * (max - min)) + min;
+}
 /**
  * 获取一个 24 位的ID 
  * - 进程ID + 时间戳后 6 位 + 6 位序列号 + 随机数后 6 位
  * - 经测试 100W 次运行中，没有发现重复ID
  */
-export function id24(): string {
-    let offset = 0;
-    id24_buffer.writeUInt32BE(+process.pid, offset); offset += 4;
-    id24_buffer.writeUInt32BE(+String(Date.now()).substr(-6), offset); offset += 4;
-    id24_buffer.writeUInt32BE((++__index__ > 999999) ? (__index__ = 1) : __index__, offset); offset += 4;
-    id24_buffer.writeUInt32BE(+String(Math.random()).substr(-6), offset); offset += 4;
-    return id24_buffer.toString("base64");
+export function id64(): string {
+    return String(idWorker.nextId())
 }
 /**
  * 文件扫描
@@ -119,7 +118,7 @@ export function getLogger(filename: string): Logger {
                         return JSON.stringify(msg);
                     }
                     return msg;
-                })))
+                }).join(" ")))
             }
         }
         return logger;
@@ -129,3 +128,64 @@ export function getLogger(filename: string): Logger {
 export function MD5(str:string){
     return crypto.createHash("md5").update(str).digest('hex')
 }
+
+
+
+/**
+ * 发送 HTTP POST
+ * @param {*} url 
+ * @param {*} data 
+ * @param {*} headers 
+ */
+ export function HTTPPost<T>(url: string, data = {}, headers = {}):Promise<T> {
+    return new Promise((resolve, reject) => {
+        request.post(url += (url.includes("?") ? "&t=" : "?t=") + Date.now(), {
+            headers: Object.assign({
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }, headers),
+            json: true,
+            form: data
+        }, (error, response, body) => {
+            logger.info("HTTPPost-response", { url, data, body, error })
+            if (error) {
+                return reject(error);
+            }
+            resolve(body)
+        });
+    })
+}
+
+/**
+ * 发送 HTTP GET
+ * @param {*} url 
+ * @param {*} data 
+ * @param {*} headers 
+ */
+export function HTTPGet<T>(url: string, data = {}, headers = {}):Promise<T> {
+    return new Promise((resolve, reject) => {
+        request.get(url += (url.includes("?") ? "&t=" : "?t=") + Date.now(), {
+            qs: data,
+            json: true,
+            headers: Object.assign({}, headers),
+        }, (error, response, body) => {
+            logger.info("HTTPGet-response", { url, data, body, error })
+            if (error) {
+                return reject(error);
+            }
+            resolve(body)
+        });
+    })
+}
+
+export function AESCBCEncrypt(str: string, key:string, iv:string): string {
+    const cipher  = crypto.createCipheriv("aes-128-cbc", key, iv);
+    return cipher.update(str, 'utf8', 'base64') + cipher.final('base64')
+}
+
+export function AESCBCDecrypt(str: string, key:string, iv:string): string {
+    const cipher  = crypto.createDecipheriv("aes-128-cbc", key, iv);
+    return cipher.update(str, 'base64', 'utf8') + cipher.final()
+}
+
+/**延时函数 */
+export function sleep(ms: number){ return new Promise(r => setTimeout(r, ms)) };

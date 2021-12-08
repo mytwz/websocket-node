@@ -1,0 +1,101 @@
+<!--
+ * @Author: Summer
+ * @LastEditors: Summer
+ * @Description: 
+ * @Date: 2021-11-30 14:35:49 +0800
+ * @LastEditTime: 2021-11-30 18:10:28 +0800
+ * @FilePath: \pj-node-imserver-ballroom\static\statistics.html
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户统计</title>
+</head>
+
+<body>
+    <h1 id="total"></h1>
+    <h1 id="user_total"></h1>
+    <h1 id="tourist_total"></h1>
+    <div id="main" style="width: 600px;height:400px;"></div>
+</body>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.2.2/dist/echarts.min.js"></script>
+<script>
+    async function getData() {
+        return fetch(location.href, {
+            method: "POST", headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: "REQUEST_ID" })
+        }).then(body => body.json()).then(body => {
+            return body.data;
+        })
+    }
+
+    async function load() {
+        const data = await getData();
+        const Width = window.screen.width
+        const Height = window.screen.height
+        const doc = document.getElementById('main')
+
+        const names = Object.keys(data.room).sort()
+
+        //////////////////////////////////////////////////
+        doc.style.width = `${Width - 100}px`;
+        doc.style.height = `${Height / 3}px`;
+        document.getElementById('total').innerText = `客户端总数：${data.total}`
+        document.getElementById('user_total').innerText = `用户总数：${data.user}`
+        document.getElementById('tourist_total').innerText = `游客总数：${data.tourist}`
+
+        echarts.init(doc).setOption({
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {
+                    // Use axis to trigger tooltip
+                    type: 'shadow' // 'shadow' as default; can also be 'line' or 'shadow'
+                }
+            },
+            legend: {},
+            grid: {
+                top: '3%',
+                left: '3%',
+                right: '4%',
+                bottom: '3%',
+                containLabel: true
+            },
+            xAxis: {
+                type: 'value'
+            },
+            yAxis: {
+                type: 'category',
+                data: names
+            },
+            series: [
+                {
+                    name: '用户',
+                    type: 'bar',
+                    stack: 'total',
+                    emphasis: {
+                        focus: 'series'
+                    },
+                    data: names.map(key => data.room[key].user)
+                },
+                {
+                    name: '游客',
+                    type: 'bar',
+                    stack: 'total',
+                    emphasis: {
+                        focus: 'series'
+                    },
+                    data: names.map(key => data.room[key].tourist)
+                }
+            ]
+        });
+    }
+
+    window.onload = function () {
+        load();
+    }
+</script>
+
+</html>
